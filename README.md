@@ -18,7 +18,7 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
 
 ## Installation
 
-    npm install django-nameko-client
+    npm install node-nameko-client
 
 ## Methods
 
