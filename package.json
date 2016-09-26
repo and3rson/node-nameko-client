@@ -1,6 +1,6 @@
 {
   "name": "node-nameko-client",
-  "version": "0.1-alpha",
+  "version": "0.1",
   "description": "Node.JS client for Nameko microservice framework.",
   "main": "nameko.js",
   "scripts": {
