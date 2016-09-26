@@ -4,10 +4,10 @@
 
 This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` service:
 
-    var nameko = require('./node-nameko-client');
+    var nameko = require('node-nameko-client');
 
-    nameko.connect({host: '127.0.0.1', port: 5672}).on('ready', function() {
-        nameko.call('mailer', 'send_mail', [], {}, function(e, r) {
+    nameko.connect({host: '127.0.0.1', port: 5672}).on('ready', function(rpc) {
+        rpc.call('mailer', 'send_mail', ['foo@example.org', 'Hello!', 'It\'s been a lo-o-o-ong time.'], {}, function(e, r) {
             if (e) {
                 console.log('Oops! RPC error:', e);
             } else {
@@ -20,26 +20,34 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
 
     npm install django-nameko-client
 
-## Configuration
+## Methods
 
-`connect()` method may take no arguments or single config object.
+### `.connect([config])`
+
+This method takes one optional argument: a config object.
 Allowed keys are:
 
   - `host` - RabbitMQ host (default: `127.0.0.1`)
   - `host` - RabbitMQ port (default: `5672`)
   - `exchange` - RabbitMQ exchange (default: `nameko-rpc`)
 
+### `.call(service_name, method_name, [args, [kwargs, [callback]]])`
+
+Performes RPC call by sending event to the appropriate RabbitMQ queue.
+`args` should be a list, `kwargs` should be an object.
+A `callback` will be called once a method is complete.
+
 ## Using with ExpressJS
 
 They also plays together well:
 
-    var nameko = require('./node-nameko-client');
+    var nameko = require('node-nameko-client');
     var express = require('express');
 
     var app = express();
-    var nameko = nameko.connect({host: '127.0.0.1', port: 5672});
+    var rpc = nameko.connect({host: '127.0.0.1', port: 5672});
 
-    nameko.on('ready', function() {
+    rpc.on('ready', function() {
         console.log('Connected to AMQP.');
 
         app.listen(9000, function() {
@@ -48,7 +56,7 @@ They also plays together well:
     });
 
     app.get('/', function(req, res) {
-        nameko.call('mailer', 'ping', [], {}, function(e, r) {
+        rpc.call('mailer', 'ping', ['foo@example.org', 'Hello!', 'It\'s been a lo-o-o-ong time.'], {}, function(e, r) {
             if (e) {
                 res.send('Oops! RPC error: ' + e);
             } else {
@@ -57,12 +65,20 @@ They also plays together well:
         });
     });
 
+## What's on the roadmap?
+
+- Reusing reply queues for better performance
+- Adding support for event broadcasting (e. g. BROADCAST & SINGLETON message types)
+- Adding tests
+- Fixing some unknown hard-coded values (yes, I need to RTFM)
+
 ## License
 
 The license is MIT.
 
 ## Issues
 
+Any contribution is highly appreciated!
 Feel free to submit an issue here: <https://github.com/and3rson/node-nameko-client/issues>.
 
 [Nameko]: https://github.com/onefinestay/nameko

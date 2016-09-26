@@ -69,7 +69,7 @@ NamekoClient.prototype = {
             // TODO: reuse queues by storing them in queue pool
             // and using correlationId for response matching
             replyQueue.subscribe(function(message, headers, deliveryInfo, messageObject) {
-                callback(message.error, message.result);
+                callback && callback(message.error, message.result);
                 replyQueue.unsubscribe(ctag);
             }).addCallback(function(ok) {
                 ctag = ok.consumerTag;
