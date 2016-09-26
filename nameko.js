@@ -7,18 +7,20 @@ var uuid = require('uuid');
 // - Add more error handlers
 // - Implement BROADCAST messages
 
-var NamekoClient = function(host, port, options, cb) {
+var NamekoClient = function(options, cb) {
     var self = this;
-
-    this._conn = amqp.createConnection({
-        host: host,
-        port: port
-    });
 
     options = options || {};
     this._options = {
+        host: options.host || '127.0.0.1',
+        port: options.port || 5672,
         exchange: options.exchange || 'nameko-rpc'
     };
+
+    this._conn = amqp.createConnection({
+        host: this._options.host,
+        port: this._options.port
+    });
 
     this._conn.on('error', function(e) {
         console.log('AMQP error:', e);
@@ -93,8 +95,8 @@ NamekoClient.prototype = {
 
 NamekoClient.prototype.__proto__ = events.EventEmitter.prototype;
 
-var connect = function(host, port, options, cb) {
-    return new NamekoClient(host, port, options, cb);
+var connect = function(options, cb) {
+    return new NamekoClient(options, cb);
 };
 
 exports.NamekoClient = NamekoClient;
