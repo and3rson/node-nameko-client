@@ -1,0 +1,19 @@
+{
+  "name": "node-nameko-client",
+  "version": "0.1-alpha",
+  "description": "Node.JS client for Nameko microservice framework.",
+  "main": "nameko.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "homepage": "https://github.com/and3rson/node-nameko-client",
+  "author": {
+    "email": "andrew@dun.ai",
+    "name": "Andrew Dunai"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "amqp": "^0.2.6",
+    "uuid": "^2.0.3"
+  }
+}
