@@ -26,6 +26,8 @@ var NamekoClient = function(options, cb) {
         console.log('AMQP error:', e);
     });
 
+    this._callbacks = {};
+
     this._conn.on('ready', function() {
         self._exchange = self._conn.exchange(
             self._options.exchange,
@@ -40,8 +42,30 @@ var NamekoClient = function(options, cb) {
             console.log('Exchange error', e);
         });
         self._exchange.on('open', function() {
-            self.emit('ready', self);
-            cb && cb(self);
+            self._responseQueueName = 'rpc-node-response-' + uuid.v4();
+            var ctag;
+
+            var replyQueue = self._conn.queue(self._responseQueueName, {
+                exclusive: true
+            }, function(replyQueue) {
+                replyQueue.bind(self._options.exchange, self._responseQueueName);
+
+                replyQueue.subscribe(function(message, headers, deliveryInfo, messageObject) {
+                    cid = messageObject.correlationId;
+                    callback = self._callbacks[cid];
+                    if (callback) {
+                        callback(message.error, message.result);
+                    } else {
+                        throw new Error('Received unknown correlationId!');
+                    }
+                    delete self._callbacks[cid];
+                }).addCallback(function(ok) {
+                    ctag = ok.consumerTag;
+
+                    self.emit('ready', self);
+                    cb && cb(self);
+                });
+            });
         });
     });
 };
@@ -56,40 +80,24 @@ NamekoClient.prototype = {
             kwargs: kwargs || {}
         };
 
-        var responseQueueName = 'rpc-node-response-' + uuid.v4();
-
         var correlationId = uuid.v4();
         var ctag;
 
-        var replyQueue = self._conn.queue(responseQueueName, {
-            exclusive: true
-        }, function(replyQueue) {
-            replyQueue.bind(self._options.exchange, responseQueueName);
-
-            // TODO: reuse queues by storing them in queue pool
-            // and using correlationId for response matching
-            replyQueue.subscribe(function(message, headers, deliveryInfo, messageObject) {
-                callback && callback(message.error, message.result);
-                replyQueue.unsubscribe(ctag);
-            }).addCallback(function(ok) {
-                ctag = ok.consumerTag;
-
-                self._exchange.publish(
-                    service + '.' + method,
-                    JSON.stringify(body),
-                    {
-                        contentType: 'application/json',
-                        replyTo: responseQueueName,
-                        headers: {
-                            // TODO: Research WTF is 'bar'
-                            'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
-                        },
-                        correlationId: correlationId,
-                        exchange: self._options.exchange
-                    }
-                );
-            });
-        });
+        self._callbacks[correlationId] = callback;
+        self._exchange.publish(
+            service + '.' + method,
+            JSON.stringify(body),
+            {
+                contentType: 'application/json',
+                replyTo: self._responseQueueName,
+                headers: {
+                    // TODO: Research WTF is 'bar'
+                    'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
+                },
+                correlationId: correlationId,
+                exchange: self._options.exchange
+            }
+        );
     }
 };
 
