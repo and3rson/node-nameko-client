@@ -16,6 +16,7 @@ var NamekoClient = function(options, cb) {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
         exchange: options.exchange || 'nameko-rpc',
+        timeout: options.timeout || 5000,
         debug_level: options.debug_level || 'info'
     };
 
@@ -32,7 +33,7 @@ var NamekoClient = function(options, cb) {
         console.log('AMQP error:', e);
     });
 
-    this._callbacks = {};
+    this._requests = {};
 
     this._conn.on('ready', function() {
         winston.log('debug', 'Connected to %s:%d', self._options.host, self._options.port);
@@ -64,14 +65,15 @@ var NamekoClient = function(options, cb) {
 
                 replyQueue.subscribe(function(message, headers, deliveryInfo, messageObject) {
                     cid = messageObject.correlationId;
-                    callback = self._callbacks[cid];
-                    if (callback) {
+                    request = self._requests[cid];
+                    if (request) {
                         winston.log('info', '[%s] Received response', cid);
-                        callback(message.error, message.result);
+                        clearTimeout(request.timeout);
+                        request.callback(message.error, message.result);
                     } else {
                         winston.log('error', '[%s] Received response with unknown cid!', cid);
                     }
-                    delete self._callbacks[cid];
+                    delete self._requests[cid];
                 }).addCallback(function(ok) {
                     ctag = ok.consumerTag;
 
@@ -100,7 +102,19 @@ NamekoClient.prototype = {
 
         winston.log('info', '[%s] Calling %s.%s(...)', correlationId, service, method);
 
-        self._callbacks[correlationId] = callback;
+        self._requests[correlationId] = {
+            callback: callback,
+            timeout: setTimeout(function() {
+                delete self._requests[correlationId];
+                winston.log('error', '[%s] Timed out: no response within %d ms.', correlationId, self._options.timeout);
+                callback(null, {
+                    exc_path: null,
+                    value: service + '.' + method,
+                    exc_type: 'Timeout',
+                    exc_args: [service, method]
+                });
+            }, self._options.timeout)
+        };
         self._exchange.publish(
             service + '.' + method,
             JSON.stringify(body),
@@ -113,6 +127,9 @@ NamekoClient.prototype = {
                 },
                 correlationId: correlationId,
                 exchange: self._options.exchange
+            },
+            function(a, b, c) {
+                console.log(a, b, c);
             }
         );
     }
