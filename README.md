@@ -35,7 +35,7 @@ Allowed keys are:
 
 ### `.call(service_name, method_name, [args, [kwargs, [callback]]])`
 
-Performes RPC call by sending event to the appropriate RabbitMQ queue.
+Performs RPC call by sending event to the appropriate RabbitMQ queue.
 `args` should be a list, `kwargs` should be an object.
 A `callback` will be called once a method is complete.
 
