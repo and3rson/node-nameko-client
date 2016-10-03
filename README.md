@@ -27,9 +27,11 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
 This method takes one optional argument: a config object.
 Allowed keys are:
 
-  - `host` - RabbitMQ host (default: `127.0.0.1`)
-  - `host` - RabbitMQ port (default: `5672`)
-  - `exchange` - RabbitMQ exchange (default: `nameko-rpc`)
+  - `host` - RabbitMQ host (default: `"127.0.0.1"`)
+  - `port` - RabbitMQ port (default: `5672`)
+  - `exchange` - RabbitMQ exchange (default: `"nameko-rpc"`)
+  - `timeout` - Timeout for waiting for response (in ms, default: `5000`)
+  - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"info"`)
 
 ### `.call(service_name, method_name, [args, [kwargs, [callback]]])`
 
