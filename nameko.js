@@ -1,6 +1,7 @@
 var events = require('events');
 var amqp = require('amqp');
 var uuid = require('uuid');
+var winston = require('winston-color');
 
 // TODO:
 // - Add timeouts
@@ -14,8 +15,13 @@ var NamekoClient = function(options, cb) {
     this._options = {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
-        exchange: options.exchange || 'nameko-rpc'
+        exchange: options.exchange || 'nameko-rpc',
+        debug_level: options.debug_level || 'info'
     };
+
+    winston.level = this._options.debug_level;
+
+    winston.log('info', 'Creating Nameko client');
 
     this._conn = amqp.createConnection({
         host: this._options.host,
@@ -29,6 +35,8 @@ var NamekoClient = function(options, cb) {
     this._callbacks = {};
 
     this._conn.on('ready', function() {
+        winston.log('debug', 'Connected to %s:%d', self._options.host, self._options.port);
+
         self._exchange = self._conn.exchange(
             self._options.exchange,
             {
@@ -39,28 +47,35 @@ var NamekoClient = function(options, cb) {
             }
         );
         self._exchange.on('error', function(e) {
-            console.log('Exchange error', e);
+            winston.log('error', 'Exchange error: %s', e);
         });
         self._exchange.on('open', function() {
+            winston.log('debug', 'Selected exchange %s', self._options.exchange);
+
             self._responseQueueName = 'rpc-node-response-' + uuid.v4();
             var ctag;
 
             var replyQueue = self._conn.queue(self._responseQueueName, {
                 exclusive: true
             }, function(replyQueue) {
+                winston.log('debug', 'Connected to reply queue %s', self._responseQueueName);
+
                 replyQueue.bind(self._options.exchange, self._responseQueueName);
 
                 replyQueue.subscribe(function(message, headers, deliveryInfo, messageObject) {
                     cid = messageObject.correlationId;
                     callback = self._callbacks[cid];
                     if (callback) {
+                        winston.log('info', '[%s] Received response', cid);
                         callback(message.error, message.result);
                     } else {
-                        throw new Error('Received unknown correlationId!');
+                        winston.log('error', '[%s] Received response with unknown cid!', cid);
                     }
                     delete self._callbacks[cid];
                 }).addCallback(function(ok) {
                     ctag = ok.consumerTag;
+
+                    winston.log('info', 'Nameko client ready!');
 
                     self.emit('ready', self);
                     cb && cb(self);
@@ -82,6 +97,8 @@ NamekoClient.prototype = {
 
         var correlationId = uuid.v4();
         var ctag;
+
+        winston.log('info', '[%s] Calling %s.%s(...)', correlationId, service, method);
 
         self._callbacks[correlationId] = callback;
         self._exchange.publish(
