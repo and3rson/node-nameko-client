@@ -132,6 +132,9 @@ NamekoClient.prototype = {
                 console.log(a, b, c);
             }
         );
+    },
+    close: function() {
+        this._conn.disconnect();
     }
 };
 
