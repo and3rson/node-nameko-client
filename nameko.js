@@ -15,6 +15,8 @@ var NamekoClient = function(options, cb) {
     this._options = {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
+        login : options.login || null,,
+        password : options.password || null,
         exchange: options.exchange || 'nameko-rpc',
         timeout: options.timeout || 5000,
         debug_level: options.debug_level || 'info'
@@ -26,7 +28,9 @@ var NamekoClient = function(options, cb) {
 
     this._conn = amqp.createConnection({
         host: this._options.host,
-        port: this._options.port
+        port: this._options.port,
+        login: this._options.login,
+        password: this._options.password
     });
 
     this._conn.on('error', function(e) {
