@@ -145,7 +145,15 @@ NamekoClient.prototype = {
 NamekoClient.prototype.__proto__ = events.EventEmitter.prototype;
 
 var connect = function(options, cb) {
-    return new NamekoClient(options, cb);
+    if (cb) {
+        return new NamekoClient(options, cb);
+    } else {
+        return new Promise((resolve, reject) => {
+            var client = new NamekoClient(() => {
+                resolve(client);
+            });
+        });
+    }
 };
 
 exports.NamekoClient = NamekoClient;
