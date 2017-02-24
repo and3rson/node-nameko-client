@@ -149,7 +149,7 @@ var connect = function(options, cb) {
         return new NamekoClient(options, cb);
     } else {
         return new Promise((resolve, reject) => {
-            var client = new NamekoClient(() => {
+            var client = new NamekoClient(options, () => {
                 resolve(client);
             });
         });
