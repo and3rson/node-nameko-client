@@ -26,7 +26,7 @@ var NamekoClient = function(options, cb) {
         winston.level = options.debug_level || 'info';
     }
 
-    this.logger.log('info', 'Creating Nameko client');
+    this.logger.debug('Creating Nameko client');
 
     this._conn = amqp.createConnection({
         host: this._options.host,
@@ -34,7 +34,7 @@ var NamekoClient = function(options, cb) {
     });
 
     this._conn.on('error', function(e) {
-        console.log('AMQP error:', e);
+        logger.error('AMQP error:', e);
     });
 
     this._requests = {};
@@ -71,7 +71,7 @@ var NamekoClient = function(options, cb) {
                     cid = messageObject.correlationId;
                     request = self._requests[cid];
                     if (request) {
-                        self.logger.info('[%s] Received response', cid);
+                        self.logger.debug('[%s] Received response', cid);
                         clearTimeout(request.timeout);
                         request.callback(message.error, message.result);
                     } else {
@@ -81,7 +81,7 @@ var NamekoClient = function(options, cb) {
                 }).addCallback(function(ok) {
                     ctag = ok.consumerTag;
 
-                    self.logger.info('Nameko client ready!');
+                    self.logger.debug('Nameko client ready!');
 
                     self.emit('ready', self);
                     cb && cb(self);
@@ -104,7 +104,7 @@ NamekoClient.prototype = {
         var correlationId = uuid.v4();
         var ctag;
 
-        self.logger.info('[%s] Calling %s.%s(...)', correlationId, service, method);
+        self.logger.debug('[%s] Calling %s.%s(...)', correlationId, service, method);
 
         self._requests[correlationId] = {
             callback: callback,
@@ -133,7 +133,7 @@ NamekoClient.prototype = {
                 exchange: self._options.exchange
             },
             function(a, b, c) {
-                console.log(a, b, c);
+                logger.debug('Publish:', a, b, c);
             }
         );
     },
