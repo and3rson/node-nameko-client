@@ -16,6 +16,20 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
         });
     });
 
+    // You can also use promises. Here's an example with promises & ES6 syntax:
+
+    nameko.connect({host: '127.0.0.1', port: 5672})
+        .then(rpc => {
+            return rpc.call('mailer', 'send_mail', ['foo@example.org', 'Hello!', 'It\'s been a lo-o-o-ong time.']);
+        })
+        .then(result => {
+            res.send('Success: Result is', result);
+        })
+        .catch(error => {
+            console.log('Oops! RPC error:', error.stack);
+        });
+    });
+
 ## Installation
 
     npm install node-nameko-client
@@ -29,6 +43,8 @@ Allowed keys are:
 
   - `host` - RabbitMQ host (default: `"127.0.0.1"`)
   - `port` - RabbitMQ port (default: `5672`)
+  - `login` - RabbitMQ username (default: `null`)
+  - `password` - RabbitMQ password (default: `null`)
   - `exchange` - RabbitMQ exchange (default: `"nameko-rpc"`)
   - `timeout` - Timeout for waiting for response (in ms, default: `5000`)
   - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"debug"`). Has no effect if `logger` is provided (see below.)
@@ -42,7 +58,7 @@ A `callback` will be called once a method is complete.
 
 ## Using with ExpressJS
 
-They also plays together well:
+They also play well together:
 
     var nameko = require('node-nameko-client');
     var express = require('express');
@@ -70,10 +86,11 @@ They also plays together well:
 
 ## What's on the roadmap?
 
-- Reusing reply queues for better performance
-- Adding support for event broadcasting (e. g. BROADCAST & SINGLETON message types)
-- Adding tests
-- Fixing some unknown hard-coded values (yes, I need to RTFM)
+- [x] Promises
+- [x] Reusing reply queues for better performance
+- [ ] Fixing some unknown hard-coded values (already have information from [Nameko] devs regarding this, will fix soon)
+- [ ] Adding support for event broadcasting (e. g. BROADCAST & SINGLETON message types)
+- [ ] Adding tests
 
 ## License
 
