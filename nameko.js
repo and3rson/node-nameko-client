@@ -15,7 +15,8 @@ var NamekoClient = function(options, cb, onError) {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
         exchange: options.exchange || 'nameko-rpc',
-        timeout: options.timeout || 5000
+        timeout: options.timeout || 5000,
+        reconnect: typeof options.reconnect === 'undefined' ? true : options.reconnect
     };
 
     if (options.logger) {
@@ -30,16 +31,18 @@ var NamekoClient = function(options, cb, onError) {
     this._conn = amqp.createConnection({
         host: this._options.host,
         port: this._options.port
+    }, {
+        reconnect: this._options.reconnect
     });
 
     this._conn.on('error', function(e) {
-        this.logger.error('AMQP error:', e.stack);
+        self.logger.error('AMQP error:', e.stack);
         onError(e);
     });
 
     this._requests = {};
 
-    this._conn.on('ready', function() {
+    this._conn.once('ready', function() {
         self.logger.debug('Connected to %s:%d', self._options.host, self._options.port);
 
         self._exchange = self._conn.exchange(
@@ -51,11 +54,11 @@ var NamekoClient = function(options, cb, onError) {
                 autoDelete: false
             }
         );
-        self._exchange.on('error', function(e) {
+        self._exchange.removeAllListeners('error').on('error', function(e) {
             self.logger.error('Exchange error: %s', e);
             onError(e.stack);
         });
-        self._exchange.on('open', function() {
+        self._exchange.removeAllListeners('open').on('open', function() {
             self.logger.debug('Selected exchange %s', self._options.exchange);
 
             self._responseQueueName = 'rpc-node-response-' + uuid.v4();
