@@ -11,7 +11,7 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
             if (e) {
                 console.log('Oops! RPC error:', e);
             } else {
-                res.send('Success: Result is', r);
+                console.error('Success: Result is', r);
             }
         });
     });
@@ -19,16 +19,16 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
     // You can also use promises. Here's an example with promises & ES6 syntax:
 
     nameko.connect({host: '127.0.0.1', port: 5672})
-        .then(rpc => {
-            return rpc.call('mailer', 'send_mail', ['foo@example.org', 'Hello!', 'It\'s been a lo-o-o-ong time.']);
-        })
-        .then(result => {
-            res.send('Success: Result is', result);
-        })
-        .catch(error => {
-            console.log('Oops! RPC error:', error.stack);
-        });
-    });
+        .then(
+            rpc => rpc.call('mailer', 'send_mail', ['foo@example.org', 'Hello!', 'It\'s been a lo-o-o-ong time.']);
+        )
+        .then(
+            result => console.log('Success: Result is', result);
+        )
+        .catch(
+            error => console.error('Oops! RPC error:', error.stack);
+        )
+    ;
 
 ## Installation
 
@@ -36,7 +36,7 @@ This example connects to `RabbitMQ` and calls `send_mail` method from `mailer` s
 
 ## Methods
 
-### `.connect([config])`
+### `.connect([config, [callback, [onError]]])`
 
 This method takes one optional argument: a config object.
 Allowed keys are:
@@ -50,11 +50,18 @@ Allowed keys are:
   - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"debug"`). Has no effect if `logger` is provided (see below.)
   - `logger` - Custom logger to use (default: `null`). `debug_level` will have no effect if you provide it.
 
-### `.call(service_name, method_name, [args, [kwargs, [callback]]])`
+`callback` is called when the connection succeeds, `onError` is called when a connection error occurs.
+
+If `callback` is not provided then this method returns `Promise`.
+
+
+### `.call(service_name, method_name, [args, [kwargs, [callback(e, r)]]])`
 
 Performs RPC call by sending event to the appropriate RabbitMQ queue.
-`args` should be a list, `kwargs` should be an object.
-A `callback` will be called once a method is complete.
+`args` should be a list or `undefined`, `kwargs` should be an object or `undefined`.
+
+If a `callback` is provided it will be called once a method is complete.
+Otherwise this method returns `Promise`.
 
 ## Using with ExpressJS
 
