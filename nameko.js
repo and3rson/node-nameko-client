@@ -4,43 +4,51 @@ var uuid = require('uuid');
 var winston = require('winston-color');
 
 // TODO:
-// - Add timeouts
 // - Add more error handlers
 // - Implement BROADCAST messages
 
-var NamekoClient = function(options, cb) {
+var NamekoClient = function(options, cb, onError) {
     var self = this;
 
     options = options || {};
     this._options = {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
-        login : options.login || null,,
+        login : options.login || null,
         password : options.password || null,
         exchange: options.exchange || 'nameko-rpc',
         timeout: options.timeout || 5000,
-        debug_level: options.debug_level || 'info'
+        reconnect: typeof options.reconnect === 'undefined' ? true : options.reconnect
     };
 
-    winston.level = this._options.debug_level;
+    if (options.logger) {
+        this.logger = options.logger;
+    } else {
+        this.logger = winston;
+        winston.level = options.debug_level || 'info';
+    }
 
-    winston.log('info', 'Creating Nameko client');
+    this.logger.debug('Creating Nameko client');
 
     this._conn = amqp.createConnection({
         host: this._options.host,
         port: this._options.port,
         login: this._options.login,
-        password: this._options.password
+        password: this._options.password,
+        port: this._options.port
+    }, {
+        reconnect: this._options.reconnect
     });
 
     this._conn.on('error', function(e) {
-        console.log('AMQP error:', e);
+        self.logger.error('AMQP error:', e.stack);
+        onError(e);
     });
 
     this._requests = {};
 
-    this._conn.on('ready', function() {
-        winston.log('debug', 'Connected to %s:%d', self._options.host, self._options.port);
+    this._conn.once('ready', function() {
+        self.logger.debug('Connected to %s:%d', self._options.host, self._options.port);
 
         self._exchange = self._conn.exchange(
             self._options.exchange,
@@ -51,11 +59,12 @@ var NamekoClient = function(options, cb) {
                 autoDelete: false
             }
         );
-        self._exchange.on('error', function(e) {
-            winston.log('error', 'Exchange error: %s', e);
+        self._exchange.removeAllListeners('error').on('error', function(e) {
+            self.logger.error('Exchange error: %s', e);
+            onError(e.stack);
         });
-        self._exchange.on('open', function() {
-            winston.log('debug', 'Selected exchange %s', self._options.exchange);
+        self._exchange.removeAllListeners('open').on('open', function() {
+            self.logger.debug('Selected exchange %s', self._options.exchange);
 
             self._responseQueueName = 'rpc-node-response-' + uuid.v4();
             var ctag;
@@ -63,7 +72,7 @@ var NamekoClient = function(options, cb) {
             var replyQueue = self._conn.queue(self._responseQueueName, {
                 exclusive: true
             }, function(replyQueue) {
-                winston.log('debug', 'Connected to reply queue %s', self._responseQueueName);
+                self.logger.debug('Connected to reply queue %s', self._responseQueueName);
 
                 replyQueue.bind(self._options.exchange, self._responseQueueName);
 
@@ -71,17 +80,21 @@ var NamekoClient = function(options, cb) {
                     cid = messageObject.correlationId;
                     request = self._requests[cid];
                     if (request) {
-                        winston.log('info', '[%s] Received response', cid);
+                        self.logger.debug('[%s] Received response', cid);
                         clearTimeout(request.timeout);
-                        request.callback(message.error, message.result);
+                        if (!message.error) {
+                            request.onSuccess(message.result);
+                        } else {
+                            request.onError(new Error(`${message.error.exc_path}: ${message.error.value}`));
+                        }
                     } else {
-                        winston.log('error', '[%s] Received response with unknown cid!', cid);
+                        self.logger.error('[%s] Received response with unknown cid!', cid);
                     }
                     delete self._requests[cid];
                 }).addCallback(function(ok) {
                     ctag = ok.consumerTag;
 
-                    winston.log('info', 'Nameko client ready!');
+                    self.logger.debug('Nameko client ready!');
 
                     self.emit('ready', self);
                     cb && cb(self);
@@ -101,41 +114,50 @@ NamekoClient.prototype = {
             kwargs: kwargs || {}
         };
 
-        var correlationId = uuid.v4();
-        var ctag;
+        var promise = new Promise((resolve, reject) => {
+            var correlationId = uuid.v4();
+            var ctag;
 
-        winston.log('info', '[%s] Calling %s.%s(...)', correlationId, service, method);
+            self.logger.debug('[%s] Calling %s.%s(...)', correlationId, service, method);
 
-        self._requests[correlationId] = {
-            callback: callback,
-            timeout: setTimeout(function() {
-                delete self._requests[correlationId];
-                winston.log('error', '[%s] Timed out: no response within %d ms.', correlationId, self._options.timeout);
-                callback(null, {
-                    exc_path: null,
-                    value: service + '.' + method,
-                    exc_type: 'Timeout',
-                    exc_args: [service, method]
-                });
-            }, self._options.timeout)
-        };
-        self._exchange.publish(
-            service + '.' + method,
-            JSON.stringify(body),
-            {
-                contentType: 'application/json',
-                replyTo: self._responseQueueName,
-                headers: {
-                    // TODO: Research WTF is 'bar'
-                    'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
+            self._requests[correlationId] = {
+                onSuccess: resolve,
+                onError: reject,
+                timeout: setTimeout(function() {
+                    delete self._requests[correlationId];
+                    self.logger.error('[%s] Timed out: no response within %d ms.', correlationId, self._options.timeout);
+                    reject({
+                        exc_path: null,
+                        value: service + '.' + method,
+                        exc_type: 'Timeout',
+                        exc_args: [service, method]
+                    });
+                }, self._options.timeout)
+            };
+            self._exchange.publish(
+                service + '.' + method,
+                JSON.stringify(body),
+                {
+                    contentType: 'application/json',
+                    replyTo: self._responseQueueName,
+                    headers: {
+                        // TODO: Research WTF is 'bar'
+                        'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
+                    },
+                    correlationId: correlationId,
+                    exchange: self._options.exchange
                 },
-                correlationId: correlationId,
-                exchange: self._options.exchange
-            },
-            function(a, b, c) {
-                console.log(a, b, c);
-            }
-        );
+                function(a, b, c) {
+                    logger.debug('Publish:', a, b, c);
+                }
+            );
+        });
+
+        if (callback) {
+            promise.then(r => callback(null, r)).catch(e => callback(e, null));
+        } else {
+            return promise;
+        }
     },
     close: function() {
         this._conn.disconnect();
@@ -144,8 +166,16 @@ NamekoClient.prototype = {
 
 NamekoClient.prototype.__proto__ = events.EventEmitter.prototype;
 
-var connect = function(options, cb) {
-    return new NamekoClient(options, cb);
+var connect = function(options, cb, onError) {
+    if (cb) {
+        return new NamekoClient(options, cb, onError);
+    } else {
+        return new Promise((resolve, reject) => {
+            var client = new NamekoClient(options, () => {
+                resolve(client);
+            }, reject);
+        });
+    }
 };
 
 exports.NamekoClient = NamekoClient;

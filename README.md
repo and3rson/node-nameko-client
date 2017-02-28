@@ -31,7 +31,8 @@ Allowed keys are:
   - `port` - RabbitMQ port (default: `5672`)
   - `exchange` - RabbitMQ exchange (default: `"nameko-rpc"`)
   - `timeout` - Timeout for waiting for response (in ms, default: `5000`)
-  - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"info"`)
+  - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"debug"`). Has no effect if `logger` is provided (see below.)
+  - `logger` - Custom logger to use (default: `null`). `debug_level` will have no effect if you provide it.
 
 ### `.call(service_name, method_name, [args, [kwargs, [callback]]])`
 
