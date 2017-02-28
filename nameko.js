@@ -4,11 +4,10 @@ var uuid = require('uuid');
 var winston = require('winston-color');
 
 // TODO:
-// - Add timeouts
 // - Add more error handlers
 // - Implement BROADCAST messages
 
-var NamekoClient = function(options, cb) {
+var NamekoClient = function(options, cb, onError) {
     var self = this;
 
     options = options || {};
@@ -34,7 +33,8 @@ var NamekoClient = function(options, cb) {
     });
 
     this._conn.on('error', function(e) {
-        logger.error('AMQP error:', e);
+        this.logger.error('AMQP error:', e.stack);
+        onError(e);
     });
 
     this._requests = {};
@@ -53,6 +53,7 @@ var NamekoClient = function(options, cb) {
         );
         self._exchange.on('error', function(e) {
             self.logger.error('Exchange error: %s', e);
+            onError(e.stack);
         });
         self._exchange.on('open', function() {
             self.logger.debug('Selected exchange %s', self._options.exchange);
@@ -73,7 +74,11 @@ var NamekoClient = function(options, cb) {
                     if (request) {
                         self.logger.debug('[%s] Received response', cid);
                         clearTimeout(request.timeout);
-                        request.callback(message.error, message.result);
+                        if (!message.error) {
+                            request.onSuccess(message.result);
+                        } else {
+                            request.onError(new Error(`${message.error.exc_path}: ${message.error.value}`));
+                        }
                     } else {
                         self.logger.error('[%s] Received response with unknown cid!', cid);
                     }
@@ -101,41 +106,50 @@ NamekoClient.prototype = {
             kwargs: kwargs || {}
         };
 
-        var correlationId = uuid.v4();
-        var ctag;
+        var promise = new Promise((resolve, reject) => {
+            var correlationId = uuid.v4();
+            var ctag;
 
-        self.logger.debug('[%s] Calling %s.%s(...)', correlationId, service, method);
+            self.logger.debug('[%s] Calling %s.%s(...)', correlationId, service, method);
 
-        self._requests[correlationId] = {
-            callback: callback,
-            timeout: setTimeout(function() {
-                delete self._requests[correlationId];
-                self.logger.error('[%s] Timed out: no response within %d ms.', correlationId, self._options.timeout);
-                callback(null, {
-                    exc_path: null,
-                    value: service + '.' + method,
-                    exc_type: 'Timeout',
-                    exc_args: [service, method]
-                });
-            }, self._options.timeout)
-        };
-        self._exchange.publish(
-            service + '.' + method,
-            JSON.stringify(body),
-            {
-                contentType: 'application/json',
-                replyTo: self._responseQueueName,
-                headers: {
-                    // TODO: Research WTF is 'bar'
-                    'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
+            self._requests[correlationId] = {
+                onSuccess: resolve,
+                onError: reject,
+                timeout: setTimeout(function() {
+                    delete self._requests[correlationId];
+                    self.logger.error('[%s] Timed out: no response within %d ms.', correlationId, self._options.timeout);
+                    reject({
+                        exc_path: null,
+                        value: service + '.' + method,
+                        exc_type: 'Timeout',
+                        exc_args: [service, method]
+                    });
+                }, self._options.timeout)
+            };
+            self._exchange.publish(
+                service + '.' + method,
+                JSON.stringify(body),
+                {
+                    contentType: 'application/json',
+                    replyTo: self._responseQueueName,
+                    headers: {
+                        // TODO: Research WTF is 'bar'
+                        'nameko.call_id_stack': 'standalone_rpc_proxy.call.' + 'bar'
+                    },
+                    correlationId: correlationId,
+                    exchange: self._options.exchange
                 },
-                correlationId: correlationId,
-                exchange: self._options.exchange
-            },
-            function(a, b, c) {
-                logger.debug('Publish:', a, b, c);
-            }
-        );
+                function(a, b, c) {
+                    logger.debug('Publish:', a, b, c);
+                }
+            );
+        });
+
+        if (callback) {
+            promise.then(r => callback(null, r)).catch(e => callback(e, null));
+        } else {
+            return promise;
+        }
     },
     close: function() {
         this._conn.disconnect();
@@ -144,14 +158,14 @@ NamekoClient.prototype = {
 
 NamekoClient.prototype.__proto__ = events.EventEmitter.prototype;
 
-var connect = function(options, cb) {
+var connect = function(options, cb, onError) {
     if (cb) {
-        return new NamekoClient(options, cb);
+        return new NamekoClient(options, cb, onError);
     } else {
         return new Promise((resolve, reject) => {
             var client = new NamekoClient(options, () => {
                 resolve(client);
-            });
+            }, reject);
         });
     }
 };
