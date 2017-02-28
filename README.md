@@ -43,8 +43,8 @@ Allowed keys are:
 
   - `host` - RabbitMQ host (default: `"127.0.0.1"`)
   - `port` - RabbitMQ port (default: `5672`)
-  - `login` - RabbitMQ username (default: `null`)
-  - `password` - RabbitMQ password (default: `null`)
+  - `login` - RabbitMQ username (default: `"guest"`)
+  - `password` - RabbitMQ password (default: `"guest"`)
   - `exchange` - RabbitMQ exchange (default: `"nameko-rpc"`)
   - `timeout` - Timeout for waiting for response (in ms, default: `5000`)
   - `debug_level` - Debug level. Choices are `"debug"`, `"info"`, `"warning"` or `"error"` (default: `"debug"`). Has no effect if `logger` is provided (see below.)

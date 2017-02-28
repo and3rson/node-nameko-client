@@ -14,8 +14,8 @@ var NamekoClient = function(options, cb, onError) {
     this._options = {
         host: options.host || '127.0.0.1',
         port: options.port || 5672,
-        login : options.login || null,
-        password : options.password || null,
+        login : options.login || 'guest',
+        password : options.password || 'guest',
         exchange: options.exchange || 'nameko-rpc',
         timeout: options.timeout || 5000,
         reconnect: typeof options.reconnect === 'undefined' ? true : options.reconnect
