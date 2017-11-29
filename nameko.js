@@ -148,7 +148,7 @@ NamekoClient.prototype = {
                     exchange: self._options.exchange
                 },
                 function(a, b, c) {
-                    logger.debug('Publish:', a, b, c);
+                    self.logger.debug('Publish:', a, b, c);
                 }
             );
         });
