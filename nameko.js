@@ -13,6 +13,7 @@ var NamekoClient = function(options, cb, onError) {
     options = options || {};
     this._options = {
         host: options.host || '127.0.0.1',
+        vhost : options.vhost || '/'
         port: options.port || 5672,
         login : options.login || 'guest',
         password : options.password || 'guest',
@@ -32,6 +33,7 @@ var NamekoClient = function(options, cb, onError) {
 
     this._conn = amqp.createConnection({
         host: this._options.host,
+        vhost: this._options.vhost,
         port: this._options.port,
         login: this._options.login,
         password: this._options.password,
